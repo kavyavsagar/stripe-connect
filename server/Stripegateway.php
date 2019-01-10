@@ -65,11 +65,21 @@ class Stripegateway {
 	 * 
 	 * @param  array     The amount to charge in cents ( USD ) 
 	 */
-	public function checkout( $data ) {
+		public function checkout( $data ) {
 
-		if(empty($data)){
-			return array("error" => true, "message" => "Missing Parameters");
-		}	   
+		if(!isset( $data["amount"])){
+			return array("error" => true, "message" => "Missing amount for payment");
+
+		}else if(!isset( $data["source"])){
+			return array("error" => true, "message" => "Missing source parameter");
+
+		}else if(!isset( $data["customer_id"])){
+			return array("error" => true, "message" => "Missing customer id");
+			
+		}else if(!isset( $data["stripe_account_id"])){
+			return array("error" => true, "message" => "Missing stripe account id");
+		}	
+		$a_error = []; $isSucc = false;
 	   
 	    try{
 	    	// convert dollar to cent
@@ -77,7 +87,7 @@ class Stripegateway {
     		$amt = number_format((float)$tmp*100., 0, '.', '');
 
     	    // cal the 10% of amount. 10/100 * amount
-    	    $fee = ( $amt - (0.1 * $amt) ); 	
+    	    $fee = ( $amt - (0.1 * $amt) ); 
 
     	    // https://stripe.com/docs/sources/customers
     	    // attach customer with source
@@ -87,12 +97,12 @@ class Stripegateway {
 			//set the above source as default one for payment
 			$customer->default_source = $data["source"];
 			$customer->save();
-	    	    
+	    	
  
      		$charge = \Stripe\Charge::create([
     	            "amount" => $amt, // cent 
                     "currency" => "usd", 
-                    "source" => $data["source"],
+                   // "source" => $data["source"],
                     "customer" => $data["customer_id"],                       
                     "destination" => [
 			                    	"amount" => $fee,
@@ -100,11 +110,47 @@ class Stripegateway {
 				    				]
     				]);
 
+     		$isSucc = true;
+
+        // Use Stripe's library to make requests...
+		} catch(\Stripe\Error\Card $e) {
+		  // Since it's a decline, \Stripe\Error\Card will be caught			
+			$a_error[] = $e->getMessage();
+
+		} catch (\Stripe\Error\RateLimit $e) {
+		  // Too many requests made to the API too quickly
+			$a_error[] = $e->getMessage();
+
+		} catch (\Stripe\Error\InvalidRequest $e) {
+		  // Invalid parameters were supplied to Stripe's API
+			$a_error[] = $e->getMessage();
+
+		} catch (\Stripe\Error\Authentication $e) {
+		  // Authentication with Stripe's API failed
+		  // (maybe you changed API keys recently)
+			$a_error[] = $e->getMessage();
+
+		} catch (\Stripe\Error\ApiConnection $e) {
+		  // Network communication with Stripe failed
+			$a_error[] = $e->getMessage();
+
+		} catch (\Stripe\Error\Base $e) {
+		  // Display a very generic error to the user, and maybe send
+		  // yourself an email
+			$a_error[] = $e->getMessage();
+
+		} catch (Exception $e) {
+		  // Something else happened, completely unrelated to Stripe
+			$a_error[] = $e->getMessage();
+		}
+
+		// result
+		if(empty($a_error) && $isSucc){
 			return array("error" => false, "message" => "Sucessfully Charged ".$charge->status, "result" =>$charge);			
-                  
-	    }catch(Exception $e){ 
-	    	return array("error" => true, "message" => $e->getMessage());
-	    }
+		}else{
+			$err = implode(", ", $a_error);
+			return array("error" => true, "message" => $err);
+		}
 	    
 	}
 	/*

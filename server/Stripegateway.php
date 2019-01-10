@@ -77,7 +77,17 @@ class Stripegateway {
     		$amt = number_format((float)$tmp*100., 0, '.', '');
 
     	    // cal the 10% of amount. 10/100 * amount
-    	    $fee = ( $amt - (0.1 * $amt) ); 	    
+    	    $fee = ( $amt - (0.1 * $amt) ); 	
+
+    	    // https://stripe.com/docs/sources/customers
+    	    // attach customer with source
+    	    $customer = \Stripe\Customer::retrieve($data["customer_id"]);
+			$customer->sources->create(["source" => $data["source"]]);
+
+			//set the above source as default one for payment
+			$customer->default_source = $data["source"];
+			$customer->save();
+	    	    
  
      		$charge = \Stripe\Charge::create([
     	            "amount" => $amt, // cent 
